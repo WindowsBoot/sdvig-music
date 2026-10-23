@@ -1,0 +1,78 @@
+name: Build SDVIG
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate platform folder
+        run: |
+          flutter create --platforms=android --project-name sdvig_music --org com.sdvig _gen
+          cp -r _gen/android ./android
+          rm -rf _gen
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SDVIG-android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate platform folder
+        run: |
+          flutter create --platforms=windows --project-name sdvig_music --org com.sdvig _gen
+          cp -r _gen/windows ./windows
+          rm -rf _gen
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SDVIG-windows
+          path: build/windows/x64/runner/Release
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate platform folder
+        run: |
+          flutter create --platforms=linux --project-name sdvig_music --org com.sdvig _gen
+          cp -r _gen/linux ./linux
+          rm -rf _gen
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SDVIG-linux
+          path: build/linux/x64/release/bundle
