@@ -1,35 +1,15 @@
 enum MusicSource {
-  soundcloud,
-  youtubeMusic,
-  yandex,
-  vk,
-  spotify,
-  appleMusic,
-  deezer,
-  local,
-}
+  soundcloud('SoundCloud'),
+  youtubeMusic('YouTube Music'),
+  yandex('Яндекс Музыка'),
+  vk('VK Музыка'),
+  spotify('Spotify'),
+  appleMusic('Apple Music'),
+  deezer('Deezer'),
+  local('Мои файлы');
 
-extension MusicSourceX on MusicSource {
-  String get label {
-    switch (this) {
-      case MusicSource.soundcloud:
-        return 'SoundCloud';
-      case MusicSource.youtubeMusic:
-        return 'YouTube Music';
-      case MusicSource.yandex:
-        return 'Яндекс Музыка';
-      case MusicSource.vk:
-        return 'VK Музыка';
-      case MusicSource.spotify:
-        return 'Spotify';
-      case MusicSource.appleMusic:
-        return 'Apple Music';
-      case MusicSource.deezer:
-        return 'Deezer';
-      case MusicSource.local:
-        return 'Мои файлы';
-    }
-  }
+  const MusicSource(this.label);
+  final String label;
 }
 
 class Track {
