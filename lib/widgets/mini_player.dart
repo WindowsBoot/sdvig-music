@@ -3,7 +3,7 @@ import '../screens/player_screen.dart';
 import '../state/player.dart';
 import '../state/settings.dart';
 import '../theme/app_theme.dart';
-import 'gen_cover.dart';
+import 'common.dart';
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
@@ -14,78 +14,126 @@ class MiniPlayer extends StatelessWidget {
       listenable: player,
       builder: (context, _) {
         final t = player.current;
-        if (t == null) return const SizedBox.shrink();
         final cs = Theme.of(context).colorScheme;
-        final progress = (player.position / t.durationSec).clamp(0.0, 1.0);
-        return GestureDetector(
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          transitionBuilder: (child, anim) => SizeTransition(
+            sizeFactor: anim,
+            axisAlignment: -1,
+            child: FadeTransition(opacity: anim, child: child),
           ),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-            decoration: BoxDecoration(
-              color: panelColor(context),
-              borderRadius: BorderRadius.circular(settings.radius),
-              border: Border.all(color: cs.onSurface.withAlpha(30)),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 4, 6),
-                  child: Row(
-                    children: [
-                      GenCover(
-                        seed: t.seed,
-                        size: 44,
-                        radius: settings.radius / 2,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              t.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            Text(
-                              t.artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurface.withAlpha(140),
+          child: t == null
+              ? const SizedBox.shrink(key: ValueKey<String>('none'))
+              : GestureDetector(
+                  key: const ValueKey<String>('mini'),
+                  onTap: () => openPlayer(context),
+                  onVerticalDragEnd: (d) {
+                    if ((d.primaryVelocity ?? 0) < -200) openPlayer(context);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                    decoration: BoxDecoration(
+                      color: panelColor(context),
+                      borderRadius: BorderRadius.circular(settings.radius),
+                      border: Border.all(color: cs.onSurface.withAlpha(30)),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 4, 6),
+                          child: Row(
+                            children: [
+                              Hero(
+                                tag: 'cover',
+                                child: Cover(
+                                  track: t,
+                                  size: 44,
+                                  radius: settings.radius / 2,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      t.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    Text(
+                                      t.artist,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: cs.onSurface.withAlpha(140),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Pressable(
+                                onTap: player.toggle,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(10),
+                                  child: (player.loading || player.buffering)
+                                      ? const SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                          ),
+                                        )
+                                      : AnimatedSwitcher(
+                                          duration:
+                                              const Duration(milliseconds: 180),
+                                          transitionBuilder: (c, a) =>
+                                              ScaleTransition(scale: a, child: c),
+                                          child: Icon(
+                                            player.playing
+                                                ? Icons.pause_rounded
+                                                : Icons.play_arrow_rounded,
+                                            key: ValueKey<bool>(player.playing),
+                                            size: 28,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              Pressable(
+                                onTap: player.next,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(10),
+                                  child: Icon(Icons.skip_next_rounded, size: 28),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          player.playing ? Icons.pause : Icons.play_arrow,
+                        ValueListenableBuilder<Duration>(
+                          valueListenable: player.pos,
+                          builder: (context, p, _) {
+                            final total = player.duration.inMilliseconds;
+                            final v = total <= 0
+                                ? 0.0
+                                : (p.inMilliseconds / total).clamp(0.0, 1.0);
+                            return LinearProgressIndicator(
+                              value: v,
+                              minHeight: 2,
+                              backgroundColor: cs.onSurface.withAlpha(30),
+                              color: cs.primary,
+                            );
+                          },
                         ),
-                        onPressed: player.toggle,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.skip_next),
-                        onPressed: player.next,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-                LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 2,
-                  backgroundColor: cs.onSurface.withAlpha(30),
-                  color: cs.primary,
-                ),
-              ],
-            ),
-          ),
         );
       },
     );

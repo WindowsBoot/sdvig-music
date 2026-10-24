@@ -2,17 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/track.dart';
 import '../state/settings.dart';
 import '../theme/app_theme.dart';
+import '../widgets/eq_sheet.dart';
 import '../widgets/gen_cover.dart';
-
-const Map<String, List<double>> _presets = {
-  'Flat': [0, 0, 0, 0, 0],
-  'Bass': [6, 4, 0, -1, -2],
-  'Vocal': [-2, 0, 4, 3, -1],
-  'Treble': [-2, -1, 0, 4, 6],
-  'Loud': [5, 2, -1, 2, 5],
-};
-
-const List<String> _bands = ['60 Гц', '250 Гц', '1 кГц', '4 кГц', '16 кГц'];
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -82,69 +73,31 @@ class SettingsPage extends StatelessWidget {
                   ),
               ],
             ),
-            const _Label('Эквалайзер'),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final e in _presets.entries)
-                  ActionChip(
-                    label: Text(e.key),
-                    onPressed: () => settings.setEq(e.value),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 190,
-              child: Row(
-                children: [
-                  for (var i = 0; i < 5; i++)
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Text(
-                            '${settings.eq[i].round()}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          Expanded(
-                            child: RotatedBox(
-                              quarterTurns: 3,
-                              child: Slider(
-                                value: settings.eq[i],
-                                min: -12,
-                                max: 12,
-                                onChanged: (v) => settings.setEqBand(i, v),
-                              ),
-                            ),
-                          ),
-                          Text(
-                            _bands[i],
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cs.onSurface.withAlpha(140),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Text(
-              'Эквалайзер начнёт влиять на звук после подключения аудио-движка (часть 2).',
-              style: TextStyle(
-                fontSize: 12,
-                color: cs.onSurface.withAlpha(120),
-              ),
+            const _Label('Звук'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.tune_rounded),
+              title: const Text('Эквалайзер и скорость'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showEqSheet(context),
             ),
             const _Label('Источники музыки'),
             for (final s in MusicSource.values.where((s) => s != MusicSource.local))
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(s.label),
-                value: !settings.disabledSources.contains(s.name),
-                onChanged: (_) => settings.toggleSource(s.name),
-              ),
+              if (s.live)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(s.label),
+                  subtitle: Text(s.note),
+                  value: !settings.disabledSources.contains(s.name),
+                  onChanged: (_) => settings.toggleSource(s.name),
+                )
+              else
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  enabled: false,
+                  title: Text(s.label),
+                  trailing: const Text('скоро'),
+                ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(14),
@@ -152,9 +105,12 @@ class SettingsPage extends StatelessWidget {
                 color: panelColor(context),
                 borderRadius: BorderRadius.circular(settings.radius),
               ),
-              child: const Text(
-                'SDVIG v0.1 · часть 1: интерфейс, демо-данные',
-                style: TextStyle(fontSize: 12),
+              child: Text(
+                'SDVIG v0.2 · реальный звук и поиск: Audius, YouTube, Apple Music, Deezer',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurface.withAlpha(170),
+                ),
               ),
             ),
           ],
@@ -166,6 +122,7 @@ class SettingsPage extends StatelessWidget {
 
 class _Label extends StatelessWidget {
   const _Label(this.text);
+
   final String text;
 
   @override

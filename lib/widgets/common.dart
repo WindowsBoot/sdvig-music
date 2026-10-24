@@ -1,10 +1,219 @@
 import 'package:flutter/material.dart';
 import '../models/track.dart';
+import '../state/app_bus.dart';
 import '../state/player.dart';
+import '../state/settings.dart';
+import '../theme/app_theme.dart';
+import 'gen_cover.dart';
 
-String fmtTime(double s) {
-  final t = s.floor();
-  return '${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}';
+String fmtDur(Duration d) {
+  final s = d.inSeconds;
+  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+}
+
+/// Плавное появление со сдвигом (для элементов списков).
+class FadeSlideIn extends StatelessWidget {
+  const FadeSlideIn({super.key, required this.child, this.index = 0});
+
+  final Widget child;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final ms = 360 + (index > 12 ? 12 : index) * 45;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: Duration(milliseconds: ms),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, c) => Opacity(
+        opacity: v,
+        child: Transform.translate(offset: Offset(0, 16 * (1 - v)), child: c),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Кнопка с "пружинящим" нажатием.
+class Pressable extends StatefulWidget {
+  const Pressable({
+    super.key,
+    required this.child,
+    required this.onTap,
+    this.scale = 0.92,
+  });
+
+  final Widget child;
+  final VoidCallback onTap;
+  final double scale;
+
+  @override
+  State<Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<Pressable> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) => setState(() => _down = false),
+      onTapCancel: () => setState(() => _down = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _down ? widget.scale : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Чёрно-белая "таблетка" вместо стандартных чипов.
+class Pill extends StatelessWidget {
+  const Pill({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Pressable(
+      onTap: onTap,
+      scale: 0.95,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? cs.onSurface : panelColor(context),
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(
+            color: cs.onSurface.withAlpha(selected ? 0 : 35),
+          ),
+        ),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 220),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selected ? cs.surface : cs.onSurface,
+          ),
+          child: Text(label),
+        ),
+      ),
+    );
+  }
+}
+
+/// Обложка: картинка из сети с плавным появлением, иначе генеративная.
+class Cover extends StatelessWidget {
+  const Cover({super.key, required this.track, this.size, this.radius = 12});
+
+  final Track track;
+  final double? size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = track.cover;
+    final inner = Stack(
+      fit: StackFit.expand,
+      children: [
+        GenCover(seed: track.seed, radius: 0),
+        if (url != null)
+          Image.network(
+            url,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (c, e, s) => const SizedBox.shrink(),
+            frameBuilder: (context, child, frame, sync) => AnimatedOpacity(
+              opacity: (frame == null && !sync) ? 0 : 1,
+              duration: const Duration(milliseconds: 350),
+              child: child,
+            ),
+          ),
+      ],
+    );
+    final clipped = ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: inner,
+    );
+    if (size == null) return AspectRatio(aspectRatio: 1, child: clipped);
+    return SizedBox(width: size, height: size, child: clipped);
+  }
+}
+
+/// Полоса перемотки.
+class SeekBar extends StatefulWidget {
+  const SeekBar({super.key});
+
+  @override
+  State<SeekBar> createState() => _SeekBarState();
+}
+
+class _SeekBarState extends State<SeekBar> {
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final dim = Theme.of(context).colorScheme.onSurface.withAlpha(120);
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        return ValueListenableBuilder<Duration>(
+          valueListenable: player.pos,
+          builder: (context, p, __) {
+            final maxMs = player.duration.inMilliseconds <= 0
+                ? 1.0
+                : player.duration.inMilliseconds.toDouble();
+            final cur =
+                (_drag ?? p.inMilliseconds.toDouble()).clamp(0.0, maxMs).toDouble();
+            return Column(
+              children: [
+                Slider(
+                  value: cur,
+                  max: maxMs,
+                  onChangeStart: (v) => setState(() => _drag = v),
+                  onChanged: (v) => setState(() => _drag = v),
+                  onChangeEnd: (v) {
+                    player.seek(Duration(milliseconds: v.round()));
+                    setState(() => _drag = null);
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        fmtDur(Duration(milliseconds: cur.round())),
+                        style: TextStyle(fontSize: 12, color: dim),
+                      ),
+                      Text(
+                        fmtDur(player.duration),
+                        style: TextStyle(fontSize: 12, color: dim),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 }
 
 Future<String?> askPlaylistName(BuildContext context) {
@@ -34,9 +243,9 @@ Future<String?> askPlaylistName(BuildContext context) {
 }
 
 void showAddToPlaylist(BuildContext context, Track t) {
-  final messenger = ScaffoldMessenger.of(context);
   showModalBottomSheet<void>(
     context: context,
+    showDragHandle: true,
     builder: (ctx) => SafeArea(
       child: ListenableBuilder(
         listenable: player,
@@ -56,9 +265,7 @@ void showAddToPlaylist(BuildContext context, Track t) {
                 onTap: () {
                   player.addToPlaylist(name, t);
                   Navigator.pop(ctx);
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Добавлено в «$name»')),
-                  );
+                  toast('Добавлено в «$name»');
                 },
               ),
             ListTile(
@@ -70,11 +277,125 @@ void showAddToPlaylist(BuildContext context, Track t) {
                   player.createPlaylist(n);
                   player.addToPlaylist(n.trim(), t);
                   if (ctx.mounted) Navigator.pop(ctx);
+                  toast('Добавлено в «${n.trim()}»');
                 }
               },
             ),
           ],
         ),
+      ),
+    ),
+  );
+}
+
+/// Меню трека (как в VK X: далее, в очередь, в плейлист, по исполнителю).
+void showTrackMenu(BuildContext context, Track t) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: ListenableBuilder(
+        listenable: player,
+        builder: (context, _) {
+          final liked = player.isLiked(t);
+          final cs = Theme.of(context).colorScheme;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: panelColor(context),
+                  borderRadius: BorderRadius.circular(settings.radius),
+                ),
+                child: Row(
+                  children: [
+                    Cover(track: t, size: 56, radius: settings.radius / 2),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            t.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            t.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: cs.onSurface.withAlpha(140)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => player.toggleLike(t),
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        transitionBuilder: (c, a) =>
+                            ScaleTransition(scale: a, child: c),
+                        child: Icon(
+                          liked ? Icons.favorite : Icons.favorite_border,
+                          key: ValueKey<bool>(liked),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.playlist_play),
+                title: const Text('Слушать следующим'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  player.playNext(t);
+                  toast('Добавлено следующим');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.queue_music),
+                title: const Text('Добавить в конец очереди'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  player.addToQueue(t);
+                  toast('Добавлено в очередь');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.playlist_add),
+                title: const Text('Добавить в плейлист'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showAddToPlaylist(context, t);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.search),
+                title: const Text('Поиск по исполнителю'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                  searchRequest.value = t.artist;
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(
+                  t.source.note.isEmpty
+                      ? t.source.label
+                      : '${t.source.label} · ${t.source.note}',
+                ),
+              ),
+            ],
+          );
+        },
       ),
     ),
   );
