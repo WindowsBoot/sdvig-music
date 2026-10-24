@@ -45,7 +45,7 @@ class PlayerScreen extends StatelessWidget {
           final cs = Theme.of(context).colorScheme;
           final dim = cs.onSurface.withAlpha(120);
           final busy = player.loading || player.buffering;
-          final repeatIcon = player.repeat == RepeatMode.one
+          final repeatIcon = player.repeat == SdvigRepeat.one
               ? Icons.repeat_one_rounded
               : Icons.repeat_rounded;
           return Stack(
@@ -242,7 +242,7 @@ class PlayerScreen extends StatelessWidget {
                                   padding: const EdgeInsets.all(10),
                                   child: Icon(
                                     repeatIcon,
-                                    color: player.repeat == RepeatMode.off
+                                    color: player.repeat == SdvigRepeat.off
                                         ? dim
                                         : cs.onSurface,
                                   ),

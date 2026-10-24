@@ -11,7 +11,7 @@ import 'settings.dart';
 
 const String kFav = 'Избранное';
 
-enum RepeatMode { off, all, one }
+enum SdvigRepeat { off, all, one }
 
 /// Плеер: реальное воспроизведение через media_kit (libmpv).
 class PlayerController extends ChangeNotifier {
@@ -28,7 +28,7 @@ class PlayerController extends ChangeNotifier {
   Duration duration = Duration.zero;
   final ValueNotifier<Duration> pos = ValueNotifier<Duration>(Duration.zero);
   bool shuffle = false;
-  RepeatMode repeat = RepeatMode.off;
+  SdvigRepeat repeat = SdvigRepeat.off;
   List<Track> recent = [];
   final Map<String, List<Track>> playlists = {kFav: <Track>[]};
 
@@ -181,7 +181,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _onCompleted() {
-    if (repeat == RepeatMode.one) {
+    if (repeat == SdvigRepeat.one) {
       _p.seek(Duration.zero);
       _p.play();
       return;
@@ -189,7 +189,7 @@ class PlayerController extends ChangeNotifier {
     if (queue.isEmpty) return;
     var n = _nextIndex(true);
     if (n < 0) {
-      if (repeat == RepeatMode.all) {
+      if (repeat == SdvigRepeat.all) {
         n = 0;
       } else {
         _p.pause();
@@ -216,7 +216,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   void toggleRepeat() {
-    repeat = RepeatMode.values[(repeat.index + 1) % RepeatMode.values.length];
+    repeat = SdvigRepeat.values[(repeat.index + 1) % SdvigRepeat.values.length];
     notifyListeners();
   }
 
