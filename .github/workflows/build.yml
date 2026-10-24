@@ -25,7 +25,9 @@ jobs:
           rm -rf _gen
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' android/app/src/main/AndroidManifest.xml
           sed -i 's#android:label="sdvig_music"#android:label="SDVIG"#' android/app/src/main/AndroidManifest.xml
-          cp -r assets/android_res/. android/app/src/main/res/
+          if [ -d assets/android_res ]; then cp -r assets/android_res/. android/app/src/main/res/; fi
+          # media_kit использует JNI: отключаем R8-сжатие, иначе в release звук может не запуститься
+          if [ -f android/app/build.gradle.kts ]; then sed -i 's/signingConfig = signingConfigs.getByName("debug")/signingConfig = signingConfigs.getByName("debug")\n            isMinifyEnabled = false\n            isShrinkResources = false/' android/app/build.gradle.kts; fi
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
@@ -49,7 +51,7 @@ jobs:
           flutter create --platforms=windows --project-name sdvig_music --org com.sdvig _gen
           cp -r _gen/windows ./windows
           rm -rf _gen
-          cp assets/windows/app_icon.ico windows/runner/resources/app_icon.ico
+          if [ -f assets/windows/app_icon.ico ]; then cp assets/windows/app_icon.ico windows/runner/resources/app_icon.ico; fi
           sed -i 's/"sdvig_music"/"SDVIG"/g' windows/CMakeLists.txt
           sed -i 's/sdvig_music/SDVIG/g' windows/runner/Runner.rc windows/runner/main.cpp
       - run: flutter pub get
