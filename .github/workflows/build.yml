@@ -23,6 +23,9 @@ jobs:
           flutter create --platforms=android --project-name sdvig_music --org com.sdvig _gen
           cp -r _gen/android ./android
           rm -rf _gen
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#android:label="sdvig_music"#android:label="SDVIG"#' android/app/src/main/AndroidManifest.xml
+          cp -r assets/android_res/. android/app/src/main/res/
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
@@ -46,6 +49,9 @@ jobs:
           flutter create --platforms=windows --project-name sdvig_music --org com.sdvig _gen
           cp -r _gen/windows ./windows
           rm -rf _gen
+          cp assets/windows/app_icon.ico windows/runner/resources/app_icon.ico
+          sed -i 's/"sdvig_music"/"SDVIG"/g' windows/CMakeLists.txt
+          sed -i 's/sdvig_music/SDVIG/g' windows/runner/Runner.rc windows/runner/main.cpp
       - run: flutter pub get
       - run: flutter build windows --release
       - uses: actions/upload-artifact@v4
@@ -60,7 +66,7 @@ jobs:
       - name: Linux deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev mpv libmpv-dev
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -70,6 +76,7 @@ jobs:
           flutter create --platforms=linux --project-name sdvig_music --org com.sdvig _gen
           cp -r _gen/linux ./linux
           rm -rf _gen
+          sed -i 's/"sdvig_music"/"SDVIG"/g' linux/CMakeLists.txt linux/runner/my_application.cc
       - run: flutter pub get
       - run: flutter build linux --release
       - uses: actions/upload-artifact@v4
