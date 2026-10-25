@@ -19,7 +19,24 @@ class TrackTile extends StatelessWidget {
         final cur = player.current?.id == track.id;
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-          leading: Cover(track: track, size: 52, radius: settings.radius / 2),
+          leading: Stack(
+            alignment: Alignment.center,
+            children: [
+              Cover(track: track, size: 54, radius: settings.radius / 2),
+              if (cur)
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(150),
+                    borderRadius: BorderRadius.circular(settings.radius / 2),
+                  ),
+                  child: Center(
+                    child: Bars(active: player.playing, size: 20),
+                  ),
+                ),
+            ],
+          ),
           title: Text(
             track.title,
             maxLines: 1,
@@ -29,21 +46,10 @@ class TrackTile extends StatelessWidget {
               color: cur ? cs.primary : null,
             ),
           ),
-          subtitle: Row(
-            children: [
-              if (cur && player.playing)
-                const Padding(
-                  padding: EdgeInsets.only(right: 4),
-                  child: Icon(Icons.graphic_eq, size: 14),
-                ),
-              Expanded(
-                child: Text(
-                  '${track.artist} · ${track.source.label}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          subtitle: Text(
+            '${track.artist} · ${track.source.label}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           trailing: IconButton(
             icon: const Icon(Icons.more_vert),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../state/player.dart';
 import '../state/settings.dart';
 import 'common.dart';
 
@@ -19,6 +20,27 @@ bool _same(List<double> a, List<double> b) {
   return true;
 }
 
+class _H extends StatelessWidget {
+  const _H(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 10),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          letterSpacing: 3,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 void showEqSheet(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
@@ -29,21 +51,27 @@ void showEqSheet(BuildContext context) {
         listenable: settings,
         builder: (context, _) {
           final cs = Theme.of(context).colorScheme;
+          final m = modeById(settings.mode);
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'АУДИОЭФФЕКТЫ',
-                  style: TextStyle(
-                    fontSize: 13,
-                    letterSpacing: 3,
-                    fontWeight: FontWeight.w800,
-                  ),
+                const _H('РЕЖИМ ЗВУКА'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final e in kModes)
+                      Pill(
+                        label: e.label,
+                        selected: settings.mode == e.id,
+                        onTap: () => settings.setMode(e.id),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 14),
+                const _H('ЭКВАЛАЙЗЕР'),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -93,7 +121,6 @@ void showEqSheet(BuildContext context) {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
                 Row(
                   children: [
                     const Text('Скорость'),
@@ -103,24 +130,81 @@ void showEqSheet(BuildContext context) {
                         min: 0.5,
                         max: 2.0,
                         divisions: 15,
-                        onChanged: settings.setSpeed,
+                        onChanged: m.rate == null ? settings.setSpeed : null,
                       ),
                     ),
                     SizedBox(
                       width: 48,
                       child: Text(
-                        'x${settings.speed.toStringAsFixed(1)}',
+                        'x${(m.rate ?? settings.speed).toStringAsFixed(2)}',
                         textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
                   ],
                 ),
                 Text(
-                  'Эквалайзер работает через mpv: на некоторых устройствах фильтры могут быть недоступны.',
+                  'Режимы и эквалайзер работают через mpv: на некоторых устройствах часть фильтров может быть недоступна.',
                   style: TextStyle(
                     fontSize: 12,
                     color: cs.onSurface.withAlpha(120),
                   ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+void showSleepSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: ListenableBuilder(
+        listenable: player,
+        builder: (context, _) {
+          final at = player.sleepAt;
+          final left = at == null
+              ? null
+              : at.difference(DateTime.now()).inMinutes + 1;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _H('ТАЙМЕР СНА'),
+                if (left != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text('Остановлю музыку примерно через $left мин.'),
+                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final m in const [10, 15, 30, 45, 60, 90])
+                      Pill(
+                        label: '$m мин',
+                        selected: false,
+                        onTap: () {
+                          player.setSleep(Duration(minutes: m));
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    Pill(
+                      label: 'Выключить',
+                      selected: at == null,
+                      onTap: () {
+                        player.setSleep(null);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),

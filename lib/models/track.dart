@@ -1,11 +1,11 @@
 enum MusicSource {
-  soundcloud('SoundCloud', false, ''),
+  soundcloud('SoundCloud', true, 'неофициально'),
   youtubeMusic('YouTube', true, 'неофициально'),
   yandex('Яндекс Музыка', false, ''),
   vk('VK Музыка', false, ''),
-  spotify('Spotify', false, ''),
-  appleMusic('Apple Music', true, 'превью 30 с'),
-  deezer('Deezer', true, 'превью 30 с'),
+  spotify('Spotify', true, 'каталог, нужен ключ'),
+  appleMusic('Apple Music', true, 'каталог → полная версия'),
+  deezer('Deezer', true, 'каталог → полная версия'),
   audius('Audius', true, 'полные треки'),
   local('Мои файлы', false, '');
 

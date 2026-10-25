@@ -2,20 +2,39 @@ import 'package:flutter/material.dart';
 import '../models/track.dart';
 import '../state/settings.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
 import '../widgets/eq_sheet.dart';
 import '../widgets/gen_cover.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  late final TextEditingController _idC =
+      TextEditingController(text: settings.spotifyId);
+  late final TextEditingController _secC =
+      TextEditingController(text: settings.spotifySecret);
+
+  @override
+  void dispose() {
+    _idC.dispose();
+    _secC.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final dim = cs.onSurface.withAlpha(130);
     return ListenableBuilder(
       listenable: settings,
       builder: (context, _) {
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, kBottomPad),
           children: [
             const Text(
               'НАСТРОЙКИ',
@@ -59,7 +78,14 @@ class SettingsPage extends StatelessWidget {
               display: '${(settings.accent * 100).round()}%',
               onChanged: settings.setAccent,
             ),
-            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Винил в плеере'),
+              subtitle: const Text('Круглая обложка вращается, пока играет трек'),
+              value: settings.vinyl,
+              onChanged: settings.setVinyl,
+            ),
+            const SizedBox(height: 4),
             Row(
               children: [
                 for (final seed in [11, 24, 37])
@@ -77,11 +103,26 @@ class SettingsPage extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.tune_rounded),
-              title: const Text('Эквалайзер и скорость'),
+              title: const Text('Режимы, эквалайзер и скорость'),
+              subtitle: Text(modeById(settings.mode).label),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => showEqSheet(context),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Автоплей'),
+              subtitle: const Text('Когда очередь закончилась, подобрать продолжение'),
+              value: settings.autoRadio,
+              onChanged: settings.setAutoRadio,
+            ),
             const _Label('Источники музыки'),
+            Text(
+              'Играют только полные версии. Каталоги (Deezer, Apple Music, Spotify) '
+              'подсказывают точный трек, а звук берётся из YouTube, SoundCloud или Audius. '
+              'Вход в аккаунты не нужен.',
+              style: TextStyle(fontSize: 12, color: dim),
+            ),
+            const SizedBox(height: 8),
             for (final s in MusicSource.values.where((s) => s != MusicSource.local))
               if (s.live)
                 SwitchListTile(
@@ -98,7 +139,28 @@ class SettingsPage extends StatelessWidget {
                   title: Text(s.label),
                   trailing: const Text('скоро'),
                 ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            Text(
+              'Spotify (необязательно): бесплатные ключи с developer.spotify.com. '
+              'Вход в аккаунт не нужен, ключи используются только для поиска по каталогу.',
+              style: TextStyle(fontSize: 12, color: dim),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _idC,
+              decoration: const InputDecoration(labelText: 'Spotify Client ID'),
+              onChanged: (v) => settings.setSpotify(v, _secC.text),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _secC,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Spotify Client Secret',
+              ),
+              onChanged: (v) => settings.setSpotify(_idC.text, v),
+            ),
+            const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -106,11 +168,8 @@ class SettingsPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(settings.radius),
               ),
               child: Text(
-                'SDVIG v0.2 · реальный звук и поиск: Audius, YouTube, Apple Music, Deezer',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: cs.onSurface.withAlpha(170),
-                ),
+                'SDVIG v0.3 · полные версии, тексты песен, режимы звука, таймер сна, статистика',
+                style: TextStyle(fontSize: 12, color: cs.onSurface.withAlpha(170)),
               ),
             ),
           ],

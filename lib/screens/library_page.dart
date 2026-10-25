@@ -52,7 +52,7 @@ class _LibraryPageState extends State<LibraryPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Row(
                 children: [
-                  for (final e in const ['Любимое', 'Недавнее', 'Плейлисты']
+                  for (final e in const ['Любимое', 'Недавнее', 'Плейлисты', 'Статистика']
                       .asMap()
                       .entries)
                     Padding(
@@ -92,6 +92,7 @@ class _LibraryPageState extends State<LibraryPage> {
     if (_tab == 1) {
       return _trackList(context, player.recent, 'История прослушивания пуста.');
     }
+    if (_tab == 3) return _stats(context);
     return _playlists(context);
   }
 
@@ -110,7 +111,7 @@ class _LibraryPageState extends State<LibraryPage> {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: kBottomPad),
       itemCount: tracks.length + 1,
       itemBuilder: (context, i) {
         if (i == 0) {
@@ -147,7 +148,7 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget _playlists(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, kBottomPad),
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
@@ -208,6 +209,128 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _stats(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final dim = cs.onSurface.withAlpha(130);
+    final tracks = player.topTracks(5);
+    final artists = player.topArtists(5);
+    final hours = player.totalMinutes / 60.0;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, kBottomPad),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                value: '${player.totalPlays}',
+                label: 'прослушиваний',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                value: hours >= 1
+                    ? '${hours.toStringAsFixed(1)} ч'
+                    : '${player.totalMinutes} мин',
+                label: 'музыки',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        Text(
+          'ТОП ТРЕКОВ',
+          style: TextStyle(
+            fontSize: 12,
+            letterSpacing: 3,
+            fontWeight: FontWeight.w800,
+            color: dim,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (tracks.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Послушай что-нибудь, и здесь появится статистика.',
+                style: TextStyle(color: dim)),
+          ),
+        for (var i = 0; i < tracks.length; i++)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Text(
+              '${i + 1}',
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            ),
+            title: Text(
+              tracks[i].key.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(tracks[i].key.artist),
+            trailing: Text('${tracks[i].value}×'),
+            onTap: () => player.playFrom(
+              tracks.map((e) => e.key).toList(),
+              tracks[i].key,
+            ),
+          ),
+        const SizedBox(height: 18),
+        Text(
+          'ТОП ИСПОЛНИТЕЛЕЙ',
+          style: TextStyle(
+            fontSize: 12,
+            letterSpacing: 3,
+            fontWeight: FontWeight.w800,
+            color: dim,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (var i = 0; i < artists.length; i++)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Text(
+              '${i + 1}',
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+            ),
+            title: Text(artists[i].key),
+            trailing: Text('${artists[i].value}×'),
+          ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: panelColor(context),
+        borderRadius: BorderRadius.circular(settings.radius),
+        border: Border.all(color: cs.onSurface.withAlpha(25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
+          ),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: cs.onSurface.withAlpha(130)),
+          ),
+        ],
+      ),
     );
   }
 }

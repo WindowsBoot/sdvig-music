@@ -5,6 +5,7 @@ import '../state/player.dart';
 import '../state/settings.dart';
 import '../widgets/common.dart';
 import '../widgets/eq_sheet.dart';
+import '../widgets/lyrics_view.dart';
 import '../widgets/queue_sheet.dart';
 
 void openPlayer(BuildContext context) {
@@ -31,8 +32,92 @@ void openPlayer(BuildContext context) {
   );
 }
 
-class PlayerScreen extends StatelessWidget {
+class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
+
+  @override
+  State<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends State<PlayerScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 14),
+  );
+  bool _lyrics = false;
+
+  @override
+  void initState() {
+    super.initState();
+    player.addListener(_sync);
+    settings.addListener(_sync);
+    _sync();
+  }
+
+  void _sync() {
+    if (!mounted) return;
+    if (player.playing && settings.vinyl) {
+      if (!_spin.isAnimating) _spin.repeat();
+    } else {
+      if (_spin.isAnimating) _spin.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    player.removeListener(_sync);
+    settings.removeListener(_sync);
+    _spin.dispose();
+    super.dispose();
+  }
+
+  Widget _vinyl(Track t, ColorScheme cs) {
+    return AspectRatio(
+      aspectRatio: 1,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(child: Cover(track: t, radius: 9999)),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black.withAlpha(120), width: 10),
+              ),
+            ),
+          ),
+          FractionallySizedBox(
+            widthFactor: 0.16,
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.onSurface.withAlpha(90), width: 2),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _art(Track t, ColorScheme cs) {
+    if (settings.vinyl) {
+      return RotationTransition(
+        turns: _spin,
+        child: KeyedSubtree(key: ValueKey<String>('v-${t.id}'), child: _vinyl(t, cs)),
+      );
+    }
+    return Cover(
+      key: ValueKey<String>(t.id),
+      track: t,
+      radius: settings.radius * 1.4,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,26 +182,34 @@ class PlayerScreen extends StatelessWidget {
                             ],
                           ),
                           Expanded(
-                            child: Center(
-                              child: AnimatedScale(
-                                scale: player.playing ? 1 : 0.9,
-                                duration: const Duration(milliseconds: 450),
-                                curve: Curves.easeOutBack,
-                                child: Hero(
-                                  tag: 'cover',
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 400),
-                                    child: Cover(
-                                      key: ValueKey<String>(t.id),
-                                      track: t,
-                                      radius: settings.radius * 1.4,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 350),
+                              child: _lyrics
+                                  ? KeyedSubtree(
+                                      key: const ValueKey<String>('lyrics'),
+                                      child: LyricsView(track: t),
+                                    )
+                                  : Center(
+                                      key: const ValueKey<String>('art'),
+                                      child: AnimatedScale(
+                                        scale: player.playing ? 1 : 0.9,
+                                        duration:
+                                            const Duration(milliseconds: 450),
+                                        curve: Curves.easeOutBack,
+                                        child: Hero(
+                                          tag: 'cover',
+                                          child: AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 400,
+                                            ),
+                                            child: _art(t, cs),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ),
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           Row(
                             children: [
                               Expanded(
@@ -169,9 +262,8 @@ class PlayerScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          const SeekBar(),
                           const SizedBox(height: 4),
+                          const SeekBar(),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -189,7 +281,10 @@ class PlayerScreen extends StatelessWidget {
                                 onTap: player.prev,
                                 child: const Padding(
                                   padding: EdgeInsets.all(8),
-                                  child: Icon(Icons.skip_previous_rounded, size: 42),
+                                  child: Icon(
+                                    Icons.skip_previous_rounded,
+                                    size: 42,
+                                  ),
                                 ),
                               ),
                               Pressable(
@@ -213,15 +308,21 @@ class PlayerScreen extends StatelessWidget {
                                             ),
                                           )
                                         : AnimatedSwitcher(
-                                            duration:
-                                                const Duration(milliseconds: 200),
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
                                             transitionBuilder: (c, a) =>
-                                                ScaleTransition(scale: a, child: c),
+                                                ScaleTransition(
+                                              scale: a,
+                                              child: c,
+                                            ),
                                             child: Icon(
                                               player.playing
                                                   ? Icons.pause_rounded
                                                   : Icons.play_arrow_rounded,
-                                              key: ValueKey<bool>(player.playing),
+                                              key: ValueKey<bool>(
+                                                player.playing,
+                                              ),
                                               size: 44,
                                               color: cs.surface,
                                             ),
@@ -250,24 +351,31 @@ class PlayerScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               _Action(
+                                icon: Icons.lyrics_rounded,
+                                label: 'Текст',
+                                on: _lyrics,
+                                onTap: () => setState(() => _lyrics = !_lyrics),
+                              ),
+                              _Action(
                                 icon: Icons.tune_rounded,
-                                label: 'Эффекты',
+                                label: 'Звук',
                                 onTap: () => showEqSheet(context),
+                              ),
+                              _Action(
+                                icon: Icons.bedtime_rounded,
+                                label: player.sleepAt == null ? 'Сон' : 'Сон ✓',
+                                on: player.sleepAt != null,
+                                onTap: () => showSleepSheet(context),
                               ),
                               _Action(
                                 icon: Icons.queue_music_rounded,
                                 label: 'Очередь',
                                 onTap: () => showQueueSheet(context),
-                              ),
-                              _Action(
-                                icon: Icons.playlist_add_rounded,
-                                label: 'В плейлист',
-                                onTap: () => showAddToPlaylist(context, t),
                               ),
                             ],
                           ),
@@ -287,24 +395,36 @@ class PlayerScreen extends StatelessWidget {
 }
 
 class _Action extends StatelessWidget {
-  const _Action({required this.icon, required this.label, required this.onTap});
+  const _Action({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.on = false,
+  });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool on;
 
   @override
   Widget build(BuildContext context) {
-    final dim = Theme.of(context).colorScheme.onSurface.withAlpha(150);
+    final cs = Theme.of(context).colorScheme;
+    final col = on ? cs.onSurface : cs.onSurface.withAlpha(150);
     return Pressable(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: on ? cs.onSurface.withAlpha(30) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: Column(
           children: [
-            Icon(icon, size: 26),
+            Icon(icon, size: 24, color: col),
             const SizedBox(height: 4),
-            Text(label, style: TextStyle(fontSize: 11, color: dim)),
+            Text(label, style: TextStyle(fontSize: 11, color: col)),
           ],
         ),
       ),

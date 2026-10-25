@@ -32,9 +32,16 @@ class PlayerController extends ChangeNotifier {
   List<Track> recent = [];
   final Map<String, List<Track>> playlists = {kFav: <Track>[]};
 
+  // статистика
+  final Map<String, int> _plays = {};
+  final Map<String, Track> _statTracks = {};
+
+  // таймер сна
+  Timer? _sleepTimer;
+  DateTime? sleepAt;
+
   int _gen = 0;
-  String _lastAf = '#';
-  double _lastRate = -1;
+  String _lastAudioKey = '#';
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -71,6 +78,10 @@ class PlayerController extends ChangeNotifier {
 
   // ---------- хранение ----------
 
+  List<Track> _decodeTracks(dynamic v) => (v as List)
+      .map((e) => Track.fromJson(e as Map<String, dynamic>))
+      .toList();
+
   void _loadLists() {
     final p = _prefs!;
     try {
@@ -79,19 +90,22 @@ class PlayerController extends ChangeNotifier {
         final m = jsonDecode(raw) as Map<String, dynamic>;
         final loaded = <String, List<Track>>{};
         m.forEach((k, v) {
-          loaded[k] = (v as List)
-              .map((e) => Track.fromJson(e as Map<String, dynamic>))
-              .toList();
+          loaded[k] = _decodeTracks(v);
         });
         playlists
           ..clear()
           ..addAll(loaded);
       }
       final rr = p.getString('recent');
-      if (rr != null) {
-        recent = (jsonDecode(rr) as List)
-            .map((e) => Track.fromJson(e as Map<String, dynamic>))
-            .toList();
+      if (rr != null) recent = _decodeTracks(jsonDecode(rr));
+      final st = p.getString('stats');
+      if (st != null) {
+        for (final e in jsonDecode(st) as List) {
+          final m = e as Map<String, dynamic>;
+          final t = Track.fromJson(m['t'] as Map<String, dynamic>);
+          _statTracks[t.id] = t;
+          _plays[t.id] = (m['n'] as num).toInt();
+        }
       }
     } catch (_) {}
     playlists.putIfAbsent(kFav, () => <Track>[]);
@@ -112,6 +126,49 @@ class PlayerController extends ChangeNotifier {
     );
   }
 
+  void _countPlay(Track t) {
+    _plays[t.id] = (_plays[t.id] ?? 0) + 1;
+    _statTracks[t.id] = t;
+    final list = _plays.entries
+        .where((e) => _statTracks.containsKey(e.key))
+        .map((e) => {'t': _statTracks[e.key]!.toJson(), 'n': e.value})
+        .toList();
+    _prefs?.setString('stats', jsonEncode(list));
+  }
+
+  // ---------- статистика ----------
+
+  int get totalPlays => _plays.values.fold(0, (a, b) => a + b);
+
+  int get totalMinutes {
+    var s = 0;
+    _plays.forEach((id, c) {
+      final t = _statTracks[id];
+      if (t != null) s += t.durationSec * c;
+    });
+    return s ~/ 60;
+  }
+
+  List<MapEntry<Track, int>> topTracks(int n) {
+    final l = _plays.entries
+        .where((e) => _statTracks.containsKey(e.key))
+        .map((e) => MapEntry(_statTracks[e.key]!, e.value))
+        .toList();
+    l.sort((a, b) => b.value.compareTo(a.value));
+    return l.take(n).toList();
+  }
+
+  List<MapEntry<String, int>> topArtists(int n) {
+    final m = <String, int>{};
+    _plays.forEach((id, c) {
+      final t = _statTracks[id];
+      if (t != null) m[t.artist] = (m[t.artist] ?? 0) + c;
+    });
+    final l = m.entries.toList();
+    l.sort((a, b) => b.value.compareTo(a.value));
+    return l.take(n).toList();
+  }
+
   // ---------- воспроизведение ----------
 
   Future<void> _start(int i) async {
@@ -130,14 +187,29 @@ class PlayerController extends ChangeNotifier {
       await _p.open(mk.Media(url), play: true);
       await _applyAudio(force: true);
       _pushRecent(t);
+      _countPlay(t);
+      _prefetch();
     } catch (e) {
-      if (gen == _gen) toast('Не удалось запустить: ${t.title}');
+      if (gen == _gen) toast('Полная версия не найдена: ${t.title}');
     } finally {
       if (gen == _gen) {
         loading = false;
         notifyListeners();
       }
     }
+  }
+
+  /// Заранее подбираем полную версию следующего трека из каталога.
+  void _prefetch() {
+    final n = index + 1;
+    if (n >= queue.length) return;
+    final t = queue[n];
+    if (t.url != null) return;
+    try {
+      if (ProviderRegistry.of(t.source).isCatalog) {
+        Resolver.fullUrl(t).catchError((Object _) => '');
+      }
+    } catch (_) {}
   }
 
   void playFrom(List<Track> list, Track t) {
@@ -164,10 +236,12 @@ class PlayerController extends ChangeNotifier {
 
   void next() {
     if (queue.isEmpty) return;
-    _start(_nextIndex(false));
+    var n = _nextIndex();
+    if (n < 0) n = 0;
+    _start(n);
   }
 
-  int _nextIndex(bool auto) {
+  int _nextIndex() {
     if (shuffle && queue.length > 1) {
       int n;
       do {
@@ -187,10 +261,13 @@ class PlayerController extends ChangeNotifier {
       return;
     }
     if (queue.isEmpty) return;
-    var n = _nextIndex(true);
+    var n = _nextIndex();
     if (n < 0) {
       if (repeat == SdvigRepeat.all) {
         n = 0;
+      } else if (settings.autoRadio && current != null) {
+        _continueRadio(current!);
+        return;
       } else {
         _p.pause();
         _p.seek(Duration.zero);
@@ -198,6 +275,25 @@ class PlayerController extends ChangeNotifier {
       }
     }
     _start(n);
+  }
+
+  /// Автоплей: когда очередь закончилась, подбираем продолжение по исполнителю.
+  Future<void> _continueRadio(Track last) async {
+    toast('Автоплей: подбираю продолжение');
+    try {
+      var list = await ProviderRegistry.deezer.search(last.artist);
+      final ids = queue.map((e) => e.id).toSet();
+      list = list.where((t) => !ids.contains(t.id)).take(12).toList();
+      if (list.isEmpty) {
+        _p.pause();
+        return;
+      }
+      final start = queue.length;
+      queue.addAll(list);
+      _start(start);
+    } catch (_) {
+      _p.pause();
+    }
   }
 
   void prev() {
@@ -217,6 +313,24 @@ class PlayerController extends ChangeNotifier {
 
   void toggleRepeat() {
     repeat = SdvigRepeat.values[(repeat.index + 1) % SdvigRepeat.values.length];
+    notifyListeners();
+  }
+
+  // ---------- таймер сна ----------
+
+  void setSleep(Duration? d) {
+    _sleepTimer?.cancel();
+    if (d == null) {
+      sleepAt = null;
+    } else {
+      sleepAt = DateTime.now().add(d);
+      _sleepTimer = Timer(d, () {
+        _p.pause();
+        sleepAt = null;
+        toast('Таймер сна: музыка остановлена');
+        notifyListeners();
+      });
+    }
     notifyListeners();
   }
 
@@ -292,10 +406,10 @@ class PlayerController extends ChangeNotifier {
 
   // ---------- звук ----------
 
-  String _eqFilter(List<double> g) {
-    if (g.every((x) => x.abs() < 0.1)) return '';
-    const freqs = [60, 250, 1000, 4000, 16000];
+  String _filterChain() {
     final parts = <String>[];
+    const freqs = [60, 250, 1000, 4000, 16000];
+    final g = settings.eq;
     for (var i = 0; i < 5; i++) {
       if (g[i].abs() >= 0.1) {
         parts.add(
@@ -303,23 +417,29 @@ class PlayerController extends ChangeNotifier {
         );
       }
     }
+    final m = modeById(settings.mode);
+    if (m.filter.isNotEmpty) parts.add(m.filter);
+    if (parts.isEmpty) return '';
     return 'lavfi=[${parts.join(',')}]';
   }
 
   Future<void> _applyAudio({bool force = false}) async {
-    final af = _eqFilter(settings.eq);
-    if (force || af != _lastAf) {
-      _lastAf = af;
-      try {
-        await (_p.platform as dynamic).setProperty('af', af);
-      } catch (_) {}
-    }
-    if (force || settings.speed != _lastRate) {
-      _lastRate = settings.speed;
-      try {
-        await _p.setRate(settings.speed);
-      } catch (_) {}
-    }
+    final m = modeById(settings.mode);
+    final af = _filterChain();
+    final rate = m.rate ?? settings.speed;
+    final key = '$af|$rate|${m.keepPitch}';
+    if (!force && key == _lastAudioKey) return;
+    _lastAudioKey = key;
+    final dyn = _p.platform as dynamic;
+    try {
+      await dyn.setProperty('af', af);
+    } catch (_) {}
+    try {
+      await dyn.setProperty('audio-pitch-correction', m.keepPitch ? 'yes' : 'no');
+    } catch (_) {}
+    try {
+      await _p.setRate(rate);
+    } catch (_) {}
   }
 }
 

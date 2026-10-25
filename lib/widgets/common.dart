@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import '../models/track.dart';
 import '../state/app_bus.dart';
@@ -5,6 +7,9 @@ import '../state/player.dart';
 import '../state/settings.dart';
 import '../theme/app_theme.dart';
 import 'gen_cover.dart';
+
+/// Нижний отступ списков под плавающую навигацию и мини-плеер.
+const double kBottomPad = 200;
 
 String fmtDur(Duration d) {
   final s = d.inSeconds;
@@ -399,4 +404,196 @@ void showTrackMenu(BuildContext context, Track t) {
       ),
     ),
   );
+}
+
+
+/// Стеклянная панель с размытием фона.
+class GlassBox extends StatelessWidget {
+  const GlassBox({super.key, required this.child, this.radius = 28});
+
+  final Widget child;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: (dark ? Colors.black : Colors.white).withAlpha(175),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: cs.onSurface.withAlpha(38)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Танцующие полоски: показывают, что трек играет.
+class Bars extends StatefulWidget {
+  const Bars({super.key, required this.active, this.size = 16});
+
+  final bool active;
+  final double size;
+
+  @override
+  State<Bars> createState() => _BarsState();
+}
+
+class _BarsState extends State<Bars> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) _c.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant Bars old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !_c.isAnimating) {
+      _c.repeat();
+    } else if (!widget.active && _c.isAnimating) {
+      _c.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurface;
+    final sz = widget.size;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        final t = _c.value * 2 * math.pi;
+        final hs = <double>[
+          0.5 + 0.5 * math.sin(t),
+          0.5 + 0.5 * math.sin(t + 1.6),
+          0.5 + 0.5 * math.sin(t + 3.1),
+        ];
+        return SizedBox(
+          width: sz,
+          height: sz,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (final h in hs)
+                Container(
+                  width: sz / 4,
+                  height: sz * (0.2 + 0.8 * (widget.active ? h : 0.0)),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Плавающая навигация со скользящим индикатором.
+class FloatNav extends StatelessWidget {
+  const FloatNav({super.key, required this.index, required this.onTap});
+
+  final int index;
+  final ValueChanged<int> onTap;
+
+  static const List<IconData> _icons = [
+    Icons.home_rounded,
+    Icons.search_rounded,
+    Icons.library_music_rounded,
+    Icons.tune_rounded,
+  ];
+  static const List<String> _labels = ['Главная', 'Поиск', 'Моё', 'Ещё'];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GlassBox(
+      radius: 30,
+      child: SizedBox(
+        height: 64,
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final w = c.maxWidth / 4;
+            return Stack(
+              children: [
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  left: index * w + 6,
+                  top: 6,
+                  bottom: 6,
+                  width: w - 12,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: cs.onSurface,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    for (var i = 0; i < 4; i++)
+                      Expanded(
+                        child: Pressable(
+                          onTap: () => onTap(i),
+                          scale: 0.9,
+                          child: SizedBox(
+                            height: 64,
+                            child: TweenAnimationBuilder<Color?>(
+                              tween: ColorTween(
+                                end: i == index
+                                    ? cs.surface
+                                    : cs.onSurface.withAlpha(170),
+                              ),
+                              duration: const Duration(milliseconds: 250),
+                              builder: (context, col, _) => Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(_icons[i], size: 24, color: col),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _labels[i],
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: col,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
 }

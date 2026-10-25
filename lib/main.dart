@@ -8,6 +8,7 @@ import 'state/app_bus.dart';
 import 'state/player.dart';
 import 'state/settings.dart';
 import 'theme/app_theme.dart';
+import 'widgets/common.dart';
 import 'widgets/mini_player.dart';
 
 Future<void> main() async {
@@ -117,8 +118,14 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> {
+class _ShellState extends State<Shell> with SingleTickerProviderStateMixin {
   int _i = 0;
+
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+    value: 1,
+  );
 
   static const List<Widget> _pages = [
     HomePage(),
@@ -138,104 +145,79 @@ class _ShellState extends State<Shell> {
   void dispose() {
     searchRequest.removeListener(_onSearch);
     tabRequest.removeListener(_onTab);
+    _fade.dispose();
     super.dispose();
   }
 
+  void _go(int i) {
+    if (i == _i) return;
+    setState(() => _i = i);
+    _fade.forward(from: 0);
+  }
+
   void _onSearch() {
-    if (searchRequest.value != null) setState(() => _i = 1);
+    if (searchRequest.value != null) _go(1);
   }
 
   void _onTab() {
     final t = tabRequest.value;
     if (t == null) return;
     tabRequest.value = null;
-    setState(() => _i = t);
-  }
-
-  Widget _stack() {
-    return Stack(
-      children: [
-        for (var i = 0; i < _pages.length; i++)
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: i != _i,
-              child: TickerMode(
-                enabled: i == _i,
-                child: AnimatedOpacity(
-                  opacity: i == _i ? 1 : 0,
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOut,
-                  child: _pages[i],
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    _go(t);
   }
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.of(context).size.width >= 800;
-    final content = Column(
-      children: [
-        Expanded(child: _stack()),
-        const MiniPlayer(),
-      ],
-    );
-
-    if (wide) {
-      return Scaffold(
-        body: SafeArea(
-          child: Row(
-            children: [
-              NavigationRail(
-                selectedIndex: _i,
-                onDestinationSelected: (v) => setState(() => _i = v),
-                labelType: NavigationRailLabelType.all,
-                destinations: const [
-                  NavigationRailDestination(
-                    icon: Icon(Icons.home_rounded),
-                    label: Text('Главная'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.search),
-                    label: Text('Поиск'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.library_music),
-                    label: Text('Библиотека'),
-                  ),
-                  NavigationRailDestination(
-                    icon: Icon(Icons.tune),
-                    label: Text('Настройки'),
-                  ),
-                ],
-              ),
-              VerticalDivider(
-                width: 1,
-                color: Theme.of(context).dividerColor,
-              ),
-              Expanded(child: content),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
-      body: SafeArea(bottom: false, child: content),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _i,
-        onDestinationSelected: (v) => setState(() => _i = v),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Главная'),
-          NavigationDestination(icon: Icon(Icons.search), label: 'Поиск'),
-          NavigationDestination(
-            icon: Icon(Icons.library_music),
-            label: 'Библиотека',
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SafeArea(
+              bottom: false,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 820),
+                  child: AnimatedBuilder(
+                    animation: _fade,
+                    builder: (context, child) {
+                      final v = Curves.easeOutCubic.transform(_fade.value);
+                      return Opacity(
+                        opacity: v,
+                        child: Transform.translate(
+                          offset: Offset(0, 14 * (1 - v)),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: IndexedStack(index: _i, children: _pages),
+                  ),
+                ),
+              ),
+            ),
           ),
-          NavigationDestination(icon: Icon(Icons.tune), label: 'Настройки'),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const MiniPlayer(),
+                        FloatNav(index: _i, onTap: _go),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

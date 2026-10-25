@@ -81,6 +81,7 @@ class _SearchPageState extends State<SearchPage> {
     final failed = <String>[];
     final providers = ProviderRegistry.live
         .where((p) =>
+            p.enabled &&
             !settings.disabledSources.contains(p.source.name) &&
             (_only.isEmpty || _only.contains(p.source)))
         .toList();
@@ -94,18 +95,25 @@ class _SearchPageState extends State<SearchPage> {
     );
     final out = <Track>[];
     final seen = <String>{};
-    for (var i = 0;; i++) {
-      var any = false;
-      for (final l in lists) {
-        if (i < l.length) {
-          any = true;
-          final t = l[i];
-          final k =
-              '${t.title.toLowerCase().trim()}|${t.artist.toLowerCase().trim()}';
-          if (seen.add(k)) out.add(t);
-        }
+    // сначала каталоги (точные названия), затем прямые источники
+    for (final catalogFirst in [true, false]) {
+      final group = <List<Track>>[];
+      for (var k = 0; k < providers.length; k++) {
+        if (providers[k].isCatalog == catalogFirst) group.add(lists[k]);
       }
-      if (!any) break;
+      for (var i = 0;; i++) {
+        var any = false;
+        for (final l in group) {
+          if (i < l.length) {
+            any = true;
+            final t = l[i];
+            final key =
+                '${t.title.toLowerCase().trim()}|${t.artist.toLowerCase().trim()}';
+            if (seen.add(key)) out.add(t);
+          }
+        }
+        if (!any) break;
+      }
     }
     if (!mounted || id != _req) return;
     settings.addQuery(q);
@@ -173,7 +181,7 @@ class _SearchPageState extends State<SearchPage> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
               for (final p in ProviderRegistry.live)
-                if (!settings.disabledSources.contains(p.source.name))
+                if (p.enabled && !settings.disabledSources.contains(p.source.name))
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Pill(
@@ -217,7 +225,7 @@ class _SearchPageState extends State<SearchPage> {
     if (!_searched) {
       return ListView(
         key: const ValueKey<String>('suggest'),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, kBottomPad),
         children: [
           if (settings.recentQueries.isNotEmpty) ...[
             Row(
@@ -287,7 +295,7 @@ class _SearchPageState extends State<SearchPage> {
     }
     return ListView.builder(
       key: ValueKey<int>(_req),
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: kBottomPad),
       itemCount: _results.length,
       itemBuilder: (context, i) => FadeSlideIn(
         index: i,

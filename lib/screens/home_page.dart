@@ -38,6 +38,14 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 5) return 'Доброй ночи';
+    if (h < 12) return 'Доброе утро';
+    if (h < 18) return 'Добрый день';
+    return 'Добрый вечер';
+  }
+
   void _playMix() {
     final list = [..._audius, ..._deezer]..shuffle();
     if (list.isEmpty) {
@@ -64,27 +72,43 @@ class _HomePageState extends State<HomePage> {
         await _load();
       },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, kBottomPad),
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
             child: Row(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   child: Image.asset(
                     'assets/logo_mark.png',
-                    width: 40,
-                    height: 40,
+                    width: 46,
+                    height: 46,
                   ),
                 ),
                 const SizedBox(width: 14),
-                const Text(
-                  'SDVIG',
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 8,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _greeting().toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 3,
+                          color: cs.onSurface.withAlpha(130),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'SDVIG',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 8,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -127,6 +151,16 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           const SizedBox(height: 26),
+          ListenableBuilder(
+            listenable: player,
+            builder: (context, _) => player.recent.isEmpty
+                ? const SizedBox.shrink()
+                : _carousel(
+                    'Продолжить',
+                    'вы слушали недавно',
+                    player.recent.take(15).toList(),
+                  ),
+          ),
           if (_loading) ...[
             const _SectionTitle('В тренде', 'загружаем подборки'),
             _skeleton(context),
@@ -154,9 +188,9 @@ class _HomePageState extends State<HomePage> {
             )
           else ...[
             if (_audius.isNotEmpty)
-              _carousel('В тренде на Audius', 'полные треки', _audius),
+              _carousel('В тренде на Audius', 'полные версии', _audius),
             if (_deezer.isNotEmpty)
-              _carousel('Чарт Deezer', 'превью 30 с', _deezer),
+              _carousel('Чарт Deezer', 'полные версии', _deezer),
           ],
         ],
       ),
@@ -210,15 +244,15 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   Container(
-                    width: 64,
-                    height: 64,
+                    width: 68,
+                    height: 68,
                     decoration: BoxDecoration(
                       color: cs.surface,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.play_arrow_rounded,
-                      size: 40,
+                      size: 42,
                       color: cs.onSurface,
                     ),
                   ),
